@@ -18,6 +18,34 @@ extends BaseController
     $this->filesystem = $filesystem;
   }
 
+  protected function parseFile($file)
+  {
+    return $this->parseContent(
+      $this->filesystem->read($file["path"]),
+      $file
+    );
+  }
+
+  protected function parseContent($content, $file = null)
+  {
+    $extracted = $this->engine->extractMeta($content);
+    $parsed    = $this->engine->parseMeta($extracted["meta"]);
+
+    return compact("file", "content", "extracted", "parsed");
+  }
+
+  protected function stripExtension($name)
+  {
+    return str_ireplace(".blade.php", "", $name);
+  }
+
+  protected function cleanArray($array)
+  {
+    return array_filter($array, function($item) {
+      return !empty($item);
+    });
+  }
+
   public function indexAction($route = "/")
   {
     $pages = $this->filesystem->listContents("pages");
@@ -26,45 +54,37 @@ extends BaseController
     {
       if ($page["type"] == "file")
       {
-        $pageContent   = $this->filesystem->read($page["path"]);
-        $pageExtracted = $this->engine->extractMeta($pageContent);
-        $pageParsed    = $this->engine->parseMeta($pageExtracted["meta"]);
+        $page = $this->parseFile($page);
 
-        if ($pageParsed["route"] == $route)
+        if ($page["parsed"]["route"] == $route)
         {
-          $pageName   = "pages/extracted/" . $page["basename"];
-          $pageLayout = $pageParsed["layout"];
-
-          $layoutName = "layouts/extracted/" . $pageLayout;
-
-          $layoutViewName = str_ireplace(".blade.php", "", $layoutName);
+          $name       = "pages/extracted/" . $page["file"]["basename"];
+          $layout     = $page["parsed"]["layout"];
+          $layoutName = "layouts/extracted/" . $layout;
 
           $template = "
-            @extends('" . $layoutViewName . "')
+            @extends('" . $this->stripExtension($layoutName) . "')
             @section('page')
-              " . $pageExtracted["template"] . "
+              " . $page["extracted"]["template"] . "
             @stop
           ";
 
-          $this->filesystem->put($pageName, trim($template));
+          $this->filesystem->put($name, trim($template));
 
-          $layout          = "layouts/" . $pageLayout;
-          $layoutContent   = $this->filesystem->read($layout);
-          $layoutExtracted = $this->engine->extractMeta($layoutContent);
-          $layoutParsed    = $this->engine->parseMeta($layoutExtracted["meta"]);
+          $layout = "layouts/" . $layout;
+          $layout = $this->parseContent($this->filesystem->read($layout));
 
-          $this->filesystem->put($layoutName, $layoutExtracted["template"]);
+          $this->filesystem->put(
+            $layoutName,
+            $layout["extracted"]["template"]
+          );
 
-          $layoutParsed = array_filter($layoutParsed, function($item) {
-            return !empty($item);
-          });
+          $data = array_merge(
+            $this->cleanArray($layout["parsed"]),
+            $this->cleanArray($page["parsed"])
+          );
 
-          $pageParsed = array_filter($pageParsed, function($item) {
-            return !empty($item);
-          });
-
-          $viewName = str_ireplace(".blade.php", "", $pageName);
-          return View::make($viewName, array_merge($layoutParsed, $pageParsed));
+          return View::make($this->stripExtension($name), $data);
         }
       }
     }
