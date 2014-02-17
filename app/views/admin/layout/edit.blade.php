@@ -36,7 +36,7 @@
         class="form-control"
         id="description"
         name="description"
-        value="{{ Input::old("description", $desription) }}"
+        value="{{ Input::old("description", $description) }}"
       />
     </div>
     <div class="form-group">
