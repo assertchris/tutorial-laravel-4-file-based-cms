@@ -48,6 +48,14 @@ extends BaseController
 
   public function indexAction($route = "/")
   {
+    // Laravel seems to omit leading slash when it passes '{all}' (from
+    // 'app/routes.php' file) as the '$route' parameter of this controller's
+    // method indexAction($route), so adding leading slash here if it's
+    // missing to compare below to $page["parsed"]["route"].
+    if (stripos($route, "/") !== 0) {
+      $route = "/" . $route;
+    }
+
     $pages = $this->filesystem->listContents("pages");
 
     foreach ($pages as $page)
